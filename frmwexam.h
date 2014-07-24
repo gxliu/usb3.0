@@ -9,8 +9,8 @@
 #define DMA_TX_SIZE			(0)                       /* DMA transfer size is set to infinite */
 #define THREAD_STACK		(0x8000)                  /* application thread stack size */
 #define THREAD_PRIORITY		(8)                       /* application thread priority */
-#define BULK_BURST			(1)					/* Burst size for bulk EPs (SS only) */
-#define SIZE_MULT			(1)						/* dma buffer size multiplier */
+#define BULK_BURST			(10)					/* Burst size for bulk EPs (SS only) */
+#define SIZE_MULT			(2)						/* dma buffer size multiplier */
 
 #define EP_PROD_1               0x01    /* EP 1 OUT */
 #define EP_PROD_2               0x02    /* EP 2 OUT */

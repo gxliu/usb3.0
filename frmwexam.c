@@ -131,7 +131,7 @@ void ApplicationStart()
 	uint16_t size = 0, /*burstLen = 1,*/ i;
 	CyU3PEpConfig_t epCfg;
 	//CyU3PGpioClock_t rGpioClk;
-	//CyU3PGpioSimpleConfig_t gpioConfig;
+	CyU3PGpioSimpleConfig_t gpioConfig;
 
 //	CyU3PMemSet((uint8_t *)&rGpioClk, 0, sizeof(rGpioClk));
 //	rGpioClk.clkSrc = CY_U3P_SYS_CLK;
@@ -162,6 +162,13 @@ void ApplicationStart()
 	if (g_Signals[g_Stack] != 0)
 		g_Stack++;
 	g_Signals[g_Stack] = FLAG_WAITCOMM;
+
+	gpioConfig.driveHighEn = CyFalse;
+	gpioConfig.driveLowEn = CyFalse;
+	gpioConfig.inputEn = CyTrue;
+	gpioConfig.intrMode = CY_U3P_GPIO_NO_INTR;
+	for (i = 50; i<= 57; i++)
+		CyU3PGpioSetSimpleConfig(i, &gpioConfig);
 
 //	CyU3PDeviceGpioRestore(21);
 //	CyU3PDeviceGpioRestore(22);
@@ -420,7 +427,8 @@ void AppInit()
 
 	//Reset FPGA
 	CyU3PDeviceGpioOverride(45, CyTrue);
-
+	for (i = 50; i <= 57; i++)
+		CyU3PDeviceGpioOverride(i, CyTrue);
 //	CyU3PDeviceGpioOverride(21, CyTrue);
 //	CyU3PDeviceGpioOverride(22, CyTrue);
 //	CyU3PDeviceGpioOverride(25, CyTrue);
@@ -432,6 +440,13 @@ void AppInit()
 	gpioConfig.intrMode = CY_U3P_GPIO_NO_INTR;
 	gpioConfig.outValue = CyFalse;
 	CyU3PGpioSetSimpleConfig(45, &gpioConfig);
+
+	gpioConfig.driveHighEn = CyFalse;
+	gpioConfig.driveLowEn = CyFalse;
+	gpioConfig.inputEn = CyTrue;
+	gpioConfig.intrMode = CY_U3P_GPIO_NO_INTR;
+	for (i = 50; i <= 57; i++)
+		CyU3PGpioSetSimpleConfig(i, &gpioConfig);
 
 //	gpioConfig.outValue = CyTrue;
 //	CyU3PGpioSetSimpleConfig(21, &gpioConfig);
@@ -454,8 +469,8 @@ void AppInit()
 //	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_7, 127, CyFalse, 1);
 //	CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, 127, CyFalse, 1);
 //	CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, 127, CyTrue, 1);
-//	CyU3PGpifSocketConfigure(2, CY_U3P_PIB_SOCKET_2, 2, CyFalse, 1);
-//	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_3, 2, CyTrue, 1);
+//	CyU3PGpifSocketConfigure(2, CY_U3P_PIB_SOCKET_2, 127, CyFalse, 1);
+//	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_3, 127, CyTrue, 1);
 
 	CyU3PUsbStart();
 	CyU3PUsbRegisterSetupCallback(USBSetupCB, CyTrue);
@@ -1008,8 +1023,8 @@ void FpgaReset(int mode)
 
 	if (size == 1024)
 		size = size * BULK_BURST * SIZE_MULT;
-//	if ((mode > 0) && (size > 512))
-//		size = size / 2;
+	if ((mode > 0) && (size > 512))
+		size = size / 2;
 
 	size = (size / 4) - 1;
 
@@ -1055,7 +1070,7 @@ void FpgaReset(int mode)
 	g_Channels = 0;
 	for (i = 6; i >= 1; i--)
 	{
-		//CyU3PGpifSocketConfigure((i-1) & 3, 0x100 + (i-1), 127, (CyBool_t)((bFlags >> (i-1)) & 1), 1);
+		CyU3PGpifSocketConfigure((i-1) & 3, 0x100 + (i-1), 127, (CyBool_t)((bFlags >> (i-1)) & 1), 1);
 		g_Channels += (((bFlags >> (i-1)) & 1) << ((i*3) + BIT_OUT)) + (1 << ((i*3) + BIT_ON));
 	}
 
@@ -1077,22 +1092,22 @@ void FpgaReset(int mode)
 //	gpioConfig.outValue = CyFalse;
 //	CyU3PGpioSetSimpleConfig(26, &gpioConfig);
 
-	if (mode > 0)
-	{
-		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, wmark, (CyBool_t)((bFlags >> 4) & 1), 1);
-		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, wmark, (CyBool_t)((bFlags >> 5) & 1), 1);
-		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, 127, (CyBool_t)(bFlags&1), 1);
-		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, 127, (CyBool_t)((bFlags >> 1) & 1), 1);
-	}
-	else
-	{
-		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, 127, (CyBool_t)((bFlags >> 4) & 1), 1);
-		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, 127, (CyBool_t)((bFlags >> 5) & 1), 1);
-		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, wmark, (CyBool_t)(bFlags&1), 1);
-		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, wmark, (CyBool_t)((bFlags >> 1) & 1), 1);
-	}
-	CyU3PGpifSocketConfigure(2, CY_U3P_PIB_SOCKET_2, 127, (CyBool_t)((bFlags >> 2) & 1), 1);
-	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_3, 127, (CyBool_t)((bFlags >> 3) & 1), 1);
+//	if (mode > 0)
+//	{
+//		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, wmark, (CyBool_t)((bFlags >> 4) & 1), 1);
+//		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, wmark, (CyBool_t)((bFlags >> 5) & 1), 1);
+//		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, 127, (CyBool_t)(bFlags&1), 1);
+//		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, 127, (CyBool_t)((bFlags >> 1) & 1), 1);
+//	}
+//	else
+//	{
+//		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, 127, (CyBool_t)((bFlags >> 4) & 1), 1);
+//		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, 127, (CyBool_t)((bFlags >> 5) & 1), 1);
+//		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, wmark, (CyBool_t)(bFlags&1), 1);
+//		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, wmark, (CyBool_t)((bFlags >> 1) & 1), 1);
+//	}
+//	CyU3PGpifSocketConfigure(2, CY_U3P_PIB_SOCKET_2, 127, (CyBool_t)((bFlags >> 2) & 1), 1);
+//	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_3, 127, (CyBool_t)((bFlags >> 3) & 1), 1);
 	ChansSet(mode);
 
 	CyU3PGpioSimpleSetValue(45, CyTrue);
@@ -1254,13 +1269,11 @@ void SetDmaCfg(CyBool_t dir, uint64_t mode, uint8_t ep, uint16_t sockId1, uint16
 		else
 			if (((1 << (g_mode+1)) & (mode >> 32)) != 0)
 				SetSockId(&dmaCfg, dir, sockId3);
-	SetSockId(&dmaCfg, (~dir)&1, sockId4);
 	if ((((1 << (g_mode+1)) & mode) != 0) || (((1 << (g_mode+1)) & (mode >> 16)) != 0) || (((1 << (g_mode+1)) & (mode >> 32)) != 0))
 	{
+		SetSockId(&dmaCfg, (~dir)&1, sockId4);
 		CyU3PUsbSetEpNak(ep, CyFalse);
 		CyU3PDmaChannelCreate (dmaChan, dmaMode, &dmaCfg);
-//		CyU3PUsbStall(ep, CyFalse, CyTrue);
-//		CyU3PUsbResetEp(ep);
 		CyU3PUsbFlushEp(ep);
 		CyU3PDmaChannelSetXfer(dmaChan, DMA_TX_SIZE);
 	}
@@ -1294,11 +1307,8 @@ void ChansSet(int mode)
 
 	if (size == 1024)
 		size = size * BULK_BURST * SIZE_MULT;
-
-//	if ((mode > 0) && (size > 512))
-//		size = size / 2;
-
-
+	if ((mode > 0) && (size > 512))
+		size = size / 2;
 
 	// 1st data OUT
 	modes = 2 + (92 << 16) + ((uint64_t)1 << 32);
@@ -1313,7 +1323,6 @@ void ChansSet(int mode)
 	SetDmaCfg(CyTrue, modes, EP_CONS_2, CY_U3P_PIB_SOCKET_2, CY_U3P_PIB_SOCKET_1, CY_U3P_PIB_SOCKET_0, CONS_SOCKET_2, &g_SlFifoPtoU2, size, CY_U3P_DMA_TYPE_AUTO);
 
 	// 2nd data OUT
-
 	modes = 1 + (20 << 16) + ((uint64_t)64 << 32);
 	SetDmaCfg(CyFalse, modes, EP_PROD_3, CY_U3P_PIB_SOCKET_3, CY_U3P_PIB_SOCKET_2, CY_U3P_PIB_SOCKET_1, PROD_SOCKET_3, &g_SlFifoUtoP3, size, CY_U3P_DMA_TYPE_AUTO);
 
