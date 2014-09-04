@@ -27,7 +27,7 @@ const uint8_t USB30DeviceDscr[] __attribute__ ((aligned (32))) =
     0x00,0x00,                      // Device release number //
     0x01,                           // Manufacture string index //
     0x02,                           // Product string index //
-    0x00,                           // Serial number string index //
+    0x03,                           // Serial number string index //
     0x01                            // Number of configurations //
 };
 
@@ -530,6 +530,15 @@ const uint8_t USBProductDscr[] __attribute__ ((aligned (32))) =
     'F',0x00,
     'X',0x00,
     '3',0x00
+};
+
+const uint8_t USBSerialDscr[] __attribute__ ((aligned (32))) =
+{
+    0x08,                           // Descriptor size //
+    CY_U3P_USB_STRING_DESCR,        // Device descriptor type //
+    0x00,0x00,
+    0x00,0x00,
+    0x00,0x00
 };
 
 // Place this buffer as the last buffer so that no other variable / code shares

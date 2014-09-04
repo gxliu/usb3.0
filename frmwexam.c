@@ -17,7 +17,6 @@
 
 CyBool_t g_isActive;
 CyU3PThread g_rAppThread;
-CyU3PDmaBuffer_t outputBuf;
 CyU3PDmaChannel g_SlFifoUtoP, g_SlFifoPtoU, g_SlFifoUtoP2, g_SlFifoPtoU2, g_SlFifoUtoP3, g_SlFifoPtoU3, g_SlFifoUtoP4, g_SlFifoPtoU4, g_SlFifoUtoP5, g_SlFifoPtoU5;
 uint32_t g_Timeout = 10, g_Channels = 0, g_setupData0, g_setupData1;
 uint32_t ssize;
@@ -120,10 +119,13 @@ void SetMessage()
 
 void DataU2GCB(CyU3PDmaChannel *chHandle, CyU3PDmaCbType_t type, CyU3PDmaCBInput_t *input)
 {
-	//SetMessage();
-	if (g_Signals[g_Stack] != 0)
-		g_Stack++;
-	g_Signals[g_Stack] = FLAG_DATAREADY;
+//	SetMessage();
+	if (chHandle == &g_SlFifoUtoP2)
+	{
+		if (g_Signals[g_Stack] != 0)
+			g_Stack++;
+		g_Signals[g_Stack] = FLAG_DATAREADY;
+	}
 }
 
 void ApplicationStart()
@@ -267,7 +269,7 @@ CyBool_t USBSetupCB(uint32_t setupdat0, uint32_t setupdat1)
 	uint8_t  bRequest, bReqType, i2cAddr, bType, bTarget;
 	uint16_t wValue, wIndex, wLength;
 	CyBool_t isHandled = CyFalse;
-	//CyU3PReturnStatus_t status = CY_U3P_SUCCESS;
+	CyU3PReturnStatus_t status = CY_U3P_SUCCESS;
 
 	bReqType = (setupdat0 & CY_U3P_USB_REQUEST_TYPE_MASK);
 	bType    = (bReqType & CY_U3P_USB_TYPE_MASK);
@@ -281,28 +283,28 @@ CyBool_t USBSetupCB(uint32_t setupdat0, uint32_t setupdat1)
 	{
 		isHandled = CyTrue;
 		i2cAddr = wValue << 1;
+		CyU3PMemSet (glEp0Buffer, 0, sizeof (glEp0Buffer));
 		switch (bRequest)
 		{
 		case 0xBA:
 			g_setupData0 = setupdat0;
 			g_setupData1 = setupdat1;
-			if (g_Signals[g_Stack] != 0)
-				g_Stack++;
-			g_Signals[g_Stack] = FLAG_GETI2C;
-//			status  = CyU3PUsbGetEP0Data(((wLength + 15) & 0xFFF0), glEp0Buffer, NULL);
-//			if (status == CY_U3P_SUCCESS)
-//				status = CyFxUsbI2cTransfer (wIndex, i2cAddr, wLength, glEp0Buffer, CyFalse);
+//			if (g_Signals[g_Stack] != 0)
+//				g_Stack++;
+//			g_Signals[g_Stack] = FLAG_GETI2C;
+			status  = CyU3PUsbGetEP0Data(((wLength + 15) & 0xFFF0), glEp0Buffer, NULL);
+			if (status == CY_U3P_SUCCESS)
+				status = CyFxUsbI2cTransfer (wIndex, i2cAddr, wLength, glEp0Buffer, CyFalse);
 			break;
 		case 0xBB:
-			g_setupData0 = setupdat0;
-			g_setupData1 = setupdat1;
-			if (g_Signals[g_Stack] != 0)
-				g_Stack++;
-			g_Signals[g_Stack] = FLAG_REQI2C;
-//			CyU3PMemSet (glEp0Buffer, 0, sizeof (glEp0Buffer));
-//			status = CyFxUsbI2cTransfer (wIndex, i2cAddr, wLength, glEp0Buffer, CyTrue);
-//			if (status == CY_U3P_SUCCESS)
-//				status = CyU3PUsbSendEP0Data(wLength, glEp0Buffer);
+//			g_setupData0 = setupdat0;
+//			g_setupData1 = setupdat1;
+//			if (g_Signals[g_Stack] != 0)
+//				g_Stack++;
+//			g_Signals[g_Stack] = FLAG_REQI2C;
+			status = CyFxUsbI2cTransfer (wIndex, i2cAddr, wLength, glEp0Buffer, CyTrue);
+			if (status == CY_U3P_SUCCESS)
+				status = CyU3PUsbSendEP0Data(wLength, glEp0Buffer);
 			break;
 //		case 0xCC:
 //			CyU3PDeviceReset(CyTrue);
@@ -460,8 +462,8 @@ void AppInit()
 	CyU3PGpioSetValue(45, CyFalse);
 	CyU3PThreadSleep (2);
 
-	for (i = 8; i >= 1; i--)
-		CyU3PGpifSocketConfigure((i-1) & 3, 0x100 + (i-1), 127, ((i-1) & 1), 1);
+//	for (i = 8; i >= 1; i--)
+//		CyU3PGpifSocketConfigure((i-1) & 3, 0x100 + (i-1), 2, ((i-1) & 1), 1);
 
 //	CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, 127, CyTrue, 1);
 //	CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, 127, CyFalse, 1);
@@ -471,6 +473,18 @@ void AppInit()
 //	CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, 127, CyTrue, 1);
 //	CyU3PGpifSocketConfigure(2, CY_U3P_PIB_SOCKET_2, 127, CyFalse, 1);
 //	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_3, 127, CyTrue, 1);
+
+	CyU3PI2cConfig_t i2cConfig;
+	/* Initialize and configure the I2C master module. */
+	CyU3PI2cInit ();
+	/* Start the I2C master block. The bit rate is set at 100KHz.
+	* The data transfer is done via DMA. */
+	CyU3PMemSet ((uint8_t *)&i2cConfig, 0, sizeof(i2cConfig));
+	i2cConfig.bitRate    = CY_FX_USBI2C_I2C_BITRATE;
+	i2cConfig.busTimeout = 0xFFFFFFFF;
+	i2cConfig.dmaTimeout = 0xFFFF;
+	i2cConfig.isDma      = CyFalse;
+	CyU3PI2cSetConfig (&i2cConfig, NULL);
 
 	CyU3PUsbStart();
 	CyU3PUsbRegisterSetupCallback(USBSetupCB, CyTrue);
@@ -487,6 +501,7 @@ void AppInit()
     CyU3PUsbSetDesc(CY_U3P_USB_SET_STRING_DESCR, 0, (uint8_t *)USBStringLangIDDscr);
     CyU3PUsbSetDesc(CY_U3P_USB_SET_STRING_DESCR, 1, (uint8_t *)USBManufactureDscr);
     CyU3PUsbSetDesc(CY_U3P_USB_SET_STRING_DESCR, 2, (uint8_t *)USBProductDscr);
+    CyU3PUsbSetDesc(CY_U3P_USB_SET_STRING_DESCR, 3, (uint8_t *)USBSerialDscr);
     CyU3PConnectState(CyTrue, CyTrue);
 }
 
@@ -557,23 +572,22 @@ uint8_t TranslateCommand(uint8_t* inBuf, uint8_t* outBuf)
 		break;
 	case 3:
 		//outBuf[1] = (g_SlFifoUtoP.consSckId - 0x100) + ((g_SlFifoPtoU.prodSckId - 0x100) << 4);
-		outBuf[0] = 1 << BIT_ON;//2;
+		outBuf[0] = 1 << BIT_EN;
 		switch ((inBuf[BYTE_PARAM] >> BIT_CSCOND) & 7)
 		{
 		case 1:
-			outBuf[0] = (1 << BIT_ON) + (1 << BIT_OUT);//10;
+			outBuf[0] = (1 << BIT_EN) + (1 << BIT_OUT);//10;
 			break;
 		case 3:
 		case 5:
-			outBuf[0] = (g_Channels >> (bSrc * 3 - 1)) & ((1 << BIT_ON) + (1 << BIT_OUT));//(((g_Channels >> (inBuf[BYTE_COMM] & 7)) & 4) << 1) & 250;
+			outBuf[0] = (g_Channels >> (bSrc * 3 - 1)) & ((1 << BIT_EN) + (1 << BIT_OUT));
 			break;
 		case 4:
-			outBuf[0] = ((g_Channels >> (bSrc * 3 - 1)) & (1 << BIT_OUT)) | ((1 << BIT_ON) + (1 << BIT_EN));//(((g_Channels >> (inBuf[BYTE_COMM] & 7)) & 4) << 1) | 6;
+			outBuf[0] = ((g_Channels >> (bSrc * 3 - 1)) & (1 << BIT_OUT)) | ((1 << BIT_EN) + (1 << BIT_ON));
 			break;
 		case 6:
-			//outBuf[0] = (g_Channels >> (bSrc - 1)) & (1 << BIT_OUT);//((g_Channels >> (inBuf[BYTE_COMM] & 7)) & 7) << 1;
 		case 7:
-			outBuf[0] = (g_Channels >> (bSrc * 3 - 1)) & (1 << BIT_OUT);//(((g_Channels >> (inBuf[BYTE_COMM] & 7)) & 4) << 1) & 248;
+			outBuf[0] = (g_Channels >> (bSrc * 3 - 1)) & (1 << BIT_OUT);
 			break;
 		}
 		outBuf[3] = 0x10;
@@ -690,18 +704,25 @@ uint32_t GetAnswer(uint8_t* outBuf, uint8_t* recvBuf, uint8_t bType, uint32_t nR
 void AppThreadEntry(uint32_t input)
 {
 	CyU3PReturnStatus_t apiRetStatus = CY_U3P_SUCCESS;
-	CyU3PDmaBuffer_t tempBuf, buffer_p;//, bufStream;
+	CyU3PDmaBuffer_t tempBuf, buffer_p, outputBuf, bufStream;
+	CyU3PDmaCBInput_t dmaIn;
 	uint8_t /*bMode,*/ bType = 0xF2, i, i2cAddr;
 	uint16_t wValue, wIndex, wLength;
 	uint32_t nCommands, nTimeout;
 	AppInit();
 	tempBuf.buffer = (uint8_t*)CyU3PDmaBufferAlloc(1024);
 	buffer_p.buffer = (uint8_t*)CyU3PDmaBufferAlloc(1024);
+	outputBuf.buffer = (uint8_t*)CyU3PDmaBufferAlloc(1024);
 	for (;;)
 	{
-
 		switch (g_Signals[g_Stack])
 		{
+		case (FLAG_MANOUT):
+			SetMessage();
+			g_Signals[g_Stack] = 0;
+			if (g_Stack != 0)
+				g_Stack--;
+			break;
 		case (FLAG_APPSTART):
 			g_Signals[g_Stack] = 0;
 			if (g_Stack != 0)
@@ -753,7 +774,7 @@ void AppThreadEntry(uint32_t input)
 		case (FLAG_WAITCOMM):
 			if (CyU3PDmaChannelGetBuffer(&g_SlFifoUtoP, &buffer_p, CYU3P_NO_WAIT) == CY_U3P_SUCCESS)
 			{
-				nCommands = (buffer_p.count / 16) - (buffer_p.count % 16);
+				nCommands = (buffer_p.count / 16);
 				i = 0;
 				CyU3PDmaChannelDiscardBuffer(&g_SlFifoUtoP);
 				g_Stack++;
@@ -821,8 +842,9 @@ void AppThreadEntry(uint32_t input)
 			break;
 		case (FLAG_FPGARESET):
 			FpgaReset(g_mode);
-			for (i = 0; i < 8; i++)
-				g_Signals[i] = 0;
+			uint8_t ii;
+			for (ii = 0; ii < 8; ii++)
+				g_Signals[ii] = 0;
 			g_Stack = 0;
 			g_Signals[g_Stack] = (FLAG_WAITCOMM);
 			g_Stack = 1;
@@ -997,11 +1019,12 @@ void AbortAndDestroy(CyU3PDmaChannel* chHandle)
 
 void FpgaReset(int mode)
 {
-	CyU3PDmaBuffer_t rBuf;
-	uint16_t i, size = 64, wmark = 127;
+	CyU3PDmaBuffer_t rBuf, outputBuf;
+	uint16_t i;
+	CyU3PDmaChannelConfig_t dmaCfg={0};
 	//CyU3PGpioSimpleConfig_t gpioConfig;
 	//CyU3PGpioClock_t rGpioClk;
-	//CyU3PReturnStatus_t status = 0;
+	CyU3PReturnStatus_t status = 0;
 //	CyU3PMemSet((uint8_t *)&rGpioClk, 0, sizeof(rGpioClk));
 //	rGpioClk.clkSrc = CY_U3P_SYS_CLK;
 //	rGpioClk.fastClkDiv = 2;
@@ -1017,19 +1040,8 @@ void FpgaReset(int mode)
 	AbortAndDestroy(&g_SlFifoUtoP4);
 	AbortAndDestroy(&g_SlFifoUtoP5);
 
-	size = selectSize();
-
-	wmark = (size / 4) - 1;
-
-	if (size == 1024)
-		size = size * BULK_BURST * SIZE_MULT;
-	if ((mode > 0) && (size > 512))
-		size = size / 2;
-
-	size = (size / 4) - 1;
-
-	for (i = 6; i >= 1; i--)
-		CyU3PGpifSocketConfigure((i-1) & 3, 0x100 + (i-1), size, CyTrue, 1);
+//	for (i = 6; i >= 1; i--)
+//		CyU3PGpifSocketConfigure((i-1) & 3, 0x100 + (i-1), 127, CyTrue, 1);
 //   CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, 2, CyTrue, 1);
 //	CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, 2, CyTrue, 1);
 //	CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, 2, CyTrue, 1);
@@ -1070,9 +1082,16 @@ void FpgaReset(int mode)
 	g_Channels = 0;
 	for (i = 6; i >= 1; i--)
 	{
-		CyU3PGpifSocketConfigure((i-1) & 3, 0x100 + (i-1), 127, (CyBool_t)((bFlags >> (i-1)) & 1), 1);
-		g_Channels += (((bFlags >> (i-1)) & 1) << ((i*3) + BIT_OUT)) + (1 << ((i*3) + BIT_ON));
+		//CyU3PGpifSocketConfigure((i-1) & 3, 0x100 + (i-1), 127, (CyBool_t)((bFlags >> (i-1)) & 1), 1);
+		g_Channels += (((bFlags >> (i-1)) & 1) << ((i*3) + BIT_OUT)) + (1 << ((i*3) + BIT_EN));
 	}
+
+//	CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, 127, (CyBool_t)((bFlags >> 4) & 1), 1);
+//	CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, 127, (CyBool_t)((bFlags >> 5) & 1), 1);
+//	CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, 127, (CyBool_t)(bFlags&1), 1);
+//	CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, 127, (CyBool_t)((bFlags >> 1) & 1), 1);
+//	CyU3PGpifSocketConfigure(2, CY_U3P_PIB_SOCKET_2, 127, (CyBool_t)((bFlags >> 2) & 1), 1);
+//	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_3, 127, (CyBool_t)((bFlags >> 3) & 1), 1);
 
 //	CyU3PDeviceGpioOverride(21, CyTrue);
 //	CyU3PDeviceGpioOverride(22, CyTrue);
@@ -1092,32 +1111,30 @@ void FpgaReset(int mode)
 //	gpioConfig.outValue = CyFalse;
 //	CyU3PGpioSetSimpleConfig(26, &gpioConfig);
 
-//	if (mode > 0)
-//	{
-//		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, wmark, (CyBool_t)((bFlags >> 4) & 1), 1);
-//		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, wmark, (CyBool_t)((bFlags >> 5) & 1), 1);
-//		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, 127, (CyBool_t)(bFlags&1), 1);
-//		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, 127, (CyBool_t)((bFlags >> 1) & 1), 1);
-//	}
-//	else
-//	{
-//		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_4, 127, (CyBool_t)((bFlags >> 4) & 1), 1);
-//		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_5, 127, (CyBool_t)((bFlags >> 5) & 1), 1);
-//		CyU3PGpifSocketConfigure(0, CY_U3P_PIB_SOCKET_0, wmark, (CyBool_t)(bFlags&1), 1);
-//		CyU3PGpifSocketConfigure(1, CY_U3P_PIB_SOCKET_1, wmark, (CyBool_t)((bFlags >> 1) & 1), 1);
-//	}
-//	CyU3PGpifSocketConfigure(2, CY_U3P_PIB_SOCKET_2, 127, (CyBool_t)((bFlags >> 2) & 1), 1);
-//	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_3, 127, (CyBool_t)((bFlags >> 3) & 1), 1);
 	ChansSet(mode);
+
+//	dmaCfg.consSckId = g_SlFifoUtoP.consSckId;
+//	dmaCfg.count = BUF_COUNT;
+//	dmaCfg.dmaMode = CY_U3P_DMA_MODE_BYTE;
+//	dmaCfg.prodSckId = CY_U3P_CPU_SOCKET_PROD;
+//	dmaCfg.size = g_SlFifoUtoP.size;
+//	uint16_t socket = g_SlFifoUtoP.prodSckId;
+//	CyU3PDmaChannelDestroy(&g_SlFifoUtoP);
+//	status = CyU3PDmaChannelCreate(&g_SlFifoUtoP, CY_U3P_DMA_TYPE_MANUAL_OUT, &dmaCfg);
+//	status = CyU3PDmaChannelSetXfer(&g_SlFifoUtoP, DMA_TX_SIZE);
 
 	CyU3PGpioSimpleSetValue(45, CyTrue);
 
-    CyU3PDmaBufferFree(outputBuf.buffer);
     outputBuf.buffer = (uint8_t*)CyU3PDmaBufferAlloc(1024);
+    outputBuf.size = 1024;
+    outputBuf.status = 0;
     rBuf.buffer = (uint8_t*)CyU3PDmaBufferAlloc(1024);
     rBuf.size = 1024;
+    rBuf.status = 0;
     CyU3PDmaChannelReset(&g_SlFifoUtoP);
-	CyU3PMemSet(outputBuf.buffer, 0, 40);
+    //CyU3PDmaChannelGetBuffer(&g_SlFifoUtoP, &outputBuf, CYU3P_NO_WAIT);
+	CyU3PMemSet(outputBuf.buffer, 0, 1024);
+	//SetMessage();
 	outputBuf.buffer[5] = 0x80;
 	outputBuf.buffer[14] = 0x01;
 	outputBuf.buffer[21] = 0x04;
@@ -1128,7 +1145,6 @@ void FpgaReset(int mode)
 	outputBuf.buffer[38] = 0x04;
 	outputBuf.count = 40;
 	outputBuf.size = 1024;
-	outputBuf.status = 0;
 
 //	CyU3PDeviceGpioRestore(21);
 //	CyU3PDeviceGpioRestore(22);
@@ -1151,11 +1167,11 @@ void FpgaReset(int mode)
 //	CyU3PGpifSocketConfigure(3, CY_U3P_PIB_SOCKET_3, size, (CyBool_t)((bFlags >> 3) & 1), 1);
 
 	CyU3PDmaChannelSetupSendBuffer(&g_SlFifoUtoP, &outputBuf);
+	//status = CyU3PDmaChannelCommitBuffer(&g_SlFifoUtoP, 40, 0);
 	SetMessage();
 	CyU3PDmaChannelGetBuffer(&g_SlFifoPtoU, &rBuf, 10);
-	CyU3PDmaChannelReset(&g_SlFifoUtoP);
-	CyU3PDmaChannelSetXfer(&g_SlFifoUtoP, DMA_TX_SIZE);
 	CyU3PDmaChannelDiscardBuffer(&g_SlFifoPtoU);
+	CyU3PDmaChannelReset(&g_SlFifoUtoP);
 
 	if (g_mode1 == -1)
 	{
@@ -1232,9 +1248,10 @@ void FpgaReset(int mode)
 		}
 		CyU3PDmaChannelDiscardBuffer(&g_SlFifoPtoU);
 		CyU3PDmaChannelReset(&g_SlFifoUtoP);
-		CyU3PDmaChannelSetXfer(&g_SlFifoUtoP, DMA_TX_SIZE);
 	}
-	//CyU3PDmaBufferFree(rBuf.buffer);
+	CyU3PDmaChannelSetXfer(&g_SlFifoUtoP, DMA_TX_SIZE);
+	CyU3PDmaBufferFree(rBuf.buffer);
+	CyU3PDmaBufferFree(outputBuf.buffer);
 	g_mode1 = g_mode;
 }
 
@@ -1250,9 +1267,9 @@ void SetDmaCfg(CyBool_t dir, uint64_t mode, uint8_t ep, uint16_t sockId1, uint16
 {
 	CyU3PDmaChannelConfig_t dmaCfg;
 	CyU3PMemSet((uint8_t *)&dmaCfg, 0, sizeof(dmaCfg));
-	if (((ep == EP_CONS_2) || (ep == EP_PROD_2)) && (g_mode == -1))
-		dmaCfg.count = 1;
-	else
+//	if (((ep == EP_CONS_2) || (ep == EP_PROD_2)) && (g_mode == -1))
+//		dmaCfg.count = 1;
+//	else
 		dmaCfg.count = BUF_COUNT;
 	dmaCfg.dmaMode = CY_U3P_DMA_MODE_BYTE;
 	dmaCfg.size = size;
@@ -1261,6 +1278,11 @@ void SetDmaCfg(CyBool_t dir, uint64_t mode, uint8_t ep, uint16_t sockId1, uint16
 		dmaCfg.cb = DataU2GCB;
 		dmaCfg.notification = CY_U3P_DMA_CB_PROD_EVENT;
 	}
+//	if (/*(ep == EP_PROD_3)||*/(ep == EP_CONS_3))
+//	{
+//		dmaCfg.cb = CheckBuf;
+//		dmaCfg.notification = CY_U3P_DMA_CB_PROD_EVENT;
+//	}
 	if (((1 << (g_mode+1)) & mode) != 0)
 		SetSockId(&dmaCfg, dir, sockId1);
 	else
@@ -1306,8 +1328,8 @@ void ChansSet(int mode)
 	SetDmaCfg(CyTrue, modes, EP_CONS_1, CY_U3P_PIB_SOCKET_0, CY_U3P_CPU_SOCKET_PROD, CY_U3P_PIB_SOCKET_4, CONS_SOCKET_1, &g_SlFifoPtoU, size, dmaMode);
 
 	if (size == 1024)
-		size = size * BULK_BURST * SIZE_MULT;
-	if ((mode > 0) && (size > 512))
+		size = size * (BULK_BURST) * SIZE_MULT;
+	if ((mode != 0) && (size > 1024))
 		size = size / 2;
 
 	// 1st data OUT
@@ -1340,7 +1362,7 @@ void ChansSet(int mode)
 
 	// 4th data OUT
 	modes = 64;
-	SetDmaCfg(CyFalse, modes, EP_PROD_5, CY_U3P_PIB_SOCKET_5, 0, 0, PROD_SOCKET_5, &g_SlFifoUtoP5, size, CY_U3P_DMA_TYPE_AUTO);
+	SetDmaCfg(CyFalse, modes, EP_PROD_5, CY_U3P_PIB_SOCKET_3, 0, 0, PROD_SOCKET_5, &g_SlFifoUtoP5, size, CY_U3P_DMA_TYPE_AUTO);
 
 	// 4th data IN
 	modes = 32;

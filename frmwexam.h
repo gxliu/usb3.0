@@ -12,6 +12,8 @@
 #define BULK_BURST			(10)					/* Burst size for bulk EPs (SS only) */
 #define SIZE_MULT			(2)						/* dma buffer size multiplier */
 
+#define CY_FX_USBI2C_I2C_BITRATE        (100000)
+
 #define EP_PROD_1               0x01    /* EP 1 OUT */
 #define EP_PROD_2               0x02    /* EP 2 OUT */
 #define EP_PROD_3               0x03    /* EP 3 OUT */
@@ -88,6 +90,7 @@ extern const uint8_t USBBOSDscr[];
 extern const uint8_t USBSSConfigDscr[];
 extern const uint8_t USBStringLangIDDscr[];
 extern const uint8_t USBManufactureDscr[];
+extern const uint8_t USBSerialDscr[];
 extern const uint8_t USBProductDscr[];
 
 #include "cyu3externcend.h"
